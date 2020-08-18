@@ -1,3 +1,4 @@
+const RENDER_TO_DOM = Symbol('render to dom');
 
 export class Component {
   constructor () {
@@ -11,32 +12,75 @@ export class Component {
   appendChild (child) {
     this.children.push(child)
   }
-  get root() {
-    if (!this._root) {
-      this._root = this.render().root;
+  rerender () {
+    this._range.deleteContents();
+    this[RENDER_TO_DOM](this._range)
+  }
+  [RENDER_TO_DOM] (range) {
+    this._range = range;
+    this.render()[RENDER_TO_DOM](range)
+  }
+  setState(newState) {
+    if (this.state === null && typeof this.state !== 'object') {
+      this.state = newState;
+      this.rerender();
+      return;
     }
-    return this._root;
+
+    let merge = (oldState, newState)=>{
+      for (let n in newState) {
+        if (n !== null && typeof n !== 'object') {
+          oldState[n] = newState[n]
+        } else {
+          merge(oldstate[n], newState[n])
+        }
+      }
+    }
+    merge(this.state, newState);
+
+    this.rerender();
   }
 }
 
 /**
  * 代理处理 DOM 节点请求
  */
-class ElementWrapper{
-  constructor(type) {
+class ElementWrapper {
+  constructor (type) {
     this.root = document.createElement(type);
   }
   setAttribute (name, value) {
-    document.setAttribute(name, value)
+    // 绑定函数
+    if (name.match(/^on([\s\S]+)$/)) {
+      let event = RegExp.$1.replace(/^[\s\S]/, c => c.toLowerCase());
+      this.root.addEventListener(event, value)
+    } else {
+      if (name === 'className') {
+        this.root.setAttribute('class', value)
+      } else {
+        this.root.setAttribute(name, value)
+      }
+    }
   }
-  appendChild(child) {
-    this.root.appendChild(child.root)
+  appendChild (component) {
+    let range = document.createRange();
+    range.setStart(this.root, this.root.childNodes.length)
+    range.setEnd(this.root, this.root.childNodes.length)
+    component[RENDER_TO_DOM](range)
+  }
+  [RENDER_TO_DOM] (range) {
+    range.deleteContents();
+    range.insertNode(this.root);
   }
 }
 
 class TextWrapper {
-  constructor(content) {
+  constructor (content) {
     this.root = document.createTextNode(content)
+  }
+  [RENDER_TO_DOM] (range) {
+    range.deleteContents();
+    range.insertNode(this.root);
   }
 }
 
@@ -58,7 +102,9 @@ export function createElement (type, attrs, ...children) {
       if (typeof child === 'string') {
         child = new TextWrapper(child);
       }
-
+      if (child === null) {
+        continue;
+      }
       if (typeof child === 'object' && (child instanceof Array)) {
         insertChildren(child);
       } else {
@@ -72,5 +118,8 @@ export function createElement (type, attrs, ...children) {
 }
 
 export function render (component, parentElement) {
-  parentElement.appendChild(component.root);
+  let range = document.createRange();
+  range.setStart(parentElement, 0);
+  range.setEnd(parentElement, parentElement.childNodes.length)
+  component[RENDER_TO_DOM](range)
 }

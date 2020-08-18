@@ -27,4 +27,3 @@ plugins: [['@babel/plugin-transform-react-jsx', { pragma: 'createElement'}]]
 ```
 * pragma 是 jsx 插件中允许的参数，可以指定替代 React.createElement 为自定义的渲染方法
 
-
